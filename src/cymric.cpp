@@ -236,29 +236,16 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	// Initialize BLAKE2 state for 512-bit output
 	blake2b_state state;
 
-	// Mix in the seed
-	if (seed && bytes > 0) {
-		if (bytes <= 64) {
-			if (blake2b_init_key(&state, 64, seed, bytes)) {
-				return -1;
-			}
-		} else {
-			if (blake2b_init(&state, 64)) {
-				return -1;
-			}
-			if (blake2b_update(&state, (const u8 *)seed, bytes)) {
-				return -1;
-			}
-		}
-	} else {
-		if (blake2b_init(&state, 64)) {
-			return -1;
-		}
+	// Mix in previous or uninitialized state
+	if (blake2b_init_key(&state, 64, R->internal, 64)) {
+		return -1;
 	}
 
-	// Mix in previous state
-	if (blake2b_update(&state, (const u8 *)R->internal, sizeof(R->internal))) {
-		return -1;
+	// Mix in the seed
+	if (seed && bytes > 0) {
+		if (blake2b_update(&state, (const u8 *)seed, bytes)) {
+			return -1;
+		}
 	}
 
 #ifdef CYMRIC_USEC
