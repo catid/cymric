@@ -397,10 +397,9 @@ state.
 
 ## TODO
 
-+ Windows
 + FreeBSD
++ OpenBSD
++ NetBSD
 + XBox
 + PS3/PS4
-+ Online randomness tester
-+ Print out what sources are being used during testing
 
