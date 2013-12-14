@@ -33,10 +33,12 @@
 extern "C" {
 #endif
 
-#define CYMRIC_VERSION 1
+#define CYMRIC_VERSION 2
 
 /*
  * Verify binary compatibility with the Cymric API on startup.
+ *
+ * Must be called before any other functions.
  *
  * Example:
  * 	assert(cymric_init());
@@ -48,7 +50,7 @@ int _cymric_init(int expected_version);
 #define cymric_init() _cymric_init(CYMRIC_VERSION)
 
 typedef struct {
-	char internal[64];
+	char internal[68];
 } cymric_rng;
 
 /*
@@ -71,7 +73,8 @@ typedef struct {
  * to not seed in-place from another thread because cymric_random is not thread
  * safe and may discard the new seed.
  *
- * This function is thread-safe.
+ * Preconditions:
+ *	cymric_init() succeeded
  *
  * Returns 0 on success.
  * Returns non-zero on error; it is important to check for this failure.
@@ -82,6 +85,9 @@ extern int cymric_seed(cymric_rng *R, const void *seed, int bytes);
  * Generate random bytes from a previously-initialized generator
  *
  * This function is not thread-safe.
+ *
+ * Preconditions:
+ * 	R must have been produced by cymric_seed()
  *
  * Returns 0 on success.
  * Returns non-zero on error; it is important to check for this failure.
