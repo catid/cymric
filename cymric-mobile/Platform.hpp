@@ -641,11 +641,6 @@ namespace cat {
 // Works for arrays, also
 #define CAT_OBJCLR(obj) CAT_CLR((void*)&(obj), sizeof(obj))
 
-// More secure memory clearing
-#if defined(CAT_OS_WINDOWS) && !defined(CAT_OS_WINDOWS_CE) && !defined(CAT_COMPILER_MINGW)
-# define CAT_SECURE_CLR(dest, size) SecureZeroMemory(dest, size)
-#else
-
 	// From https://www.securecoding.cert.org/confluence/display/cplusplus/MSC06-CPP.+Be+aware+of+compiler+optimization+when+dealing+with+sensitive+data
 	CAT_INLINE void *cat_memset_s(void *v, int c, unsigned int n)
 	{
@@ -658,7 +653,6 @@ namespace cat {
 	}
 
 # define CAT_SECURE_CLR(dest, size) cat_memset_s(dest, 0, size)
-#endif
 
 #define CAT_SECURE_OBJCLR(obj) CAT_SECURE_CLR((void*)&(obj), sizeof(obj))
 

@@ -12,6 +12,8 @@ Cymric has been verified to work properly on the following platforms:
 + clang-3.5 build on 64-bit Linode VPS Debian
 + LLVM-clang3.3 build on 64-bit Apple iMac
 + LLVM-clang3.3 build on iPad 2
++ android-ndk-r9 gcc-androideabi-4.8 on Android 4.1.2 on Nexus S
++ MSVC2010 64-bit Windows 7 Core i7 laptop
 
 
 #### Building
@@ -22,6 +24,26 @@ Run `make test` to verify that the generator works on your platform.
 
 This also generates `libcymric.a`, which you should link to (-lcymric).  And
 you should add the `include/cymric.h` file to your include path.
+
+
+##### Windows
+
+You can link to the 64-bit `bin/libcymric.lib` static library and include
+`include/cymric.h` to use Cymric from an e.g. Visual Studio project.
+There is an example test project under `msvc2010/` that demonstrates using
+Cymric from a Visual Studio project.
+
+The following instructions allow you to reproduce the `bin/libcymric.lib` binary:
+
+Download LLVM from [http://llvm.org/builds/](http://llvm.org/builds/) for Windows to C:\LLVM\.
+Download Mingw64 from [http://mingw-w64.sourceforge.net/](http://mingw-w64.sourceforge.net/) for Windows 64-bit to C:\mingw64\.
+
+~~~
+copy Makefile.mingw64 Makefile
+c:\mingw64\bin\mingw32-make.exe release
+~~~
+
+This produces `libcymric.lib`, which can be linked to an MSVC2010 build.
 
 
 ##### iOS/Android
@@ -175,7 +197,12 @@ to avoid becoming a bottleneck in realistic use cases.
 
 ##### cymric-mobile on iPad 2:
 
-It takes roughly `1.06 ms` to seed, and `150 usec` to generate a 256-bit secret.
+It takes roughly `1.06 ms` to seed, and `140 usec` to generate a 256-bit secret.
+
+
+##### cymric-mobile on Nexus S:
+
+It takes roughly `268 usec` to seed, and `29 usec` to generate a 256-bit secret.
 
 
 ##### libcymric.a on Macbook Air (1.7 GHz Core i5-2557M Sandy Bridge, July 2011):
@@ -370,11 +397,9 @@ state.
 
 ## TODO
 
-+ Android
 + FreeBSD
++ OpenBSD
++ NetBSD
 + XBox
 + PS3/PS4
-+ Randomness unit tester
-+ Online randomness tester
-+ Print out what sources are being used during testing
 
