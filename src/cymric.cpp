@@ -55,10 +55,11 @@ using namespace cat;
 
 #if defined(CAT_OS_WINDOWS)
 # undef CYMRIC_DEV_RANDOM
+# undef CYMRIC_PTHREADS
+# undef CYMRIC_GETPID
+# define CYMRIC_WINTID
 # define CYMRIC_WINCRYPT
 # define CYMRIC_WINMEM
-# undef CYMRIC_GETTID
-# define CYMRIC_WINTID
 
 #elif defined(CAT_OS_APPLE)
 
@@ -120,16 +121,19 @@ using namespace cat;
 static u32 unix_gettid() {
 	return (u32)gettid();
 }
+#define CYMRIC_HAS_GETTID
 
 #elif defined(CAT_OS_LINUX)
 
 #include <sys/types.h>
 #include <linux/unistd.h>
+
 #ifdef __NR_gettid
 static u32 unix_gettid() {
 	return (u32)syscall(__NR_gettid);
 }
 #define CYMRIC_HAS_GETTID
+
 #endif // __NR_gettid
 
 #endif // CAT_OS_LINUX
@@ -137,8 +141,8 @@ static u32 unix_gettid() {
 // If was not able to use gettid(),
 #ifndef CYMRIC_HAS_GETTID
 // Use pthreads instead
-#undef CYMRIC_GETTID
-#define CYMRIC_PTHREADS
+# undef CYMRIC_GETTID
+# define CYMRIC_PTHREADS
 #endif
 
 #endif
@@ -298,7 +302,7 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 		if (!CryptAcquireContext(&hCryptProv, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
 			return -1;
 		}
-		if (hCryptProv && !CryptGenRandom(hCryptProv, sizeof(win_buffer), win_buffer)) {
+		if (hCryptProv && !CryptGenRandom(hCryptProv, sizeof(win_buffer), (BYTE*)win_buffer)) {
 			return -1;
 		}
 		if (hCryptProv && !CryptReleaseContext(hCryptProv, 0)) {
@@ -498,6 +502,13 @@ int cymric_random(cymric_rng *R, char *buffer, int bytes) {
 	{
 		// Mix in thread id
 		iv_mix[1] ^= unix_gettid();
+	}
+#endif
+
+#ifdef CYMRIC_WINTID
+	{
+		// Mix in thread id
+		iv_mix[1] ^= GetCurrentThreadId();
 	}
 #endif
 
