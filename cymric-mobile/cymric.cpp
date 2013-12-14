@@ -221,12 +221,20 @@ static u32 get_counter() {
 #endif // CYMRIC_COUNTER
 
 
+static volatile bool m_is_initialized = false;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 int _cymric_init(int expected_version) {
-	return (expected_version == CYMRIC_VERSION) ? 0 : -1;
+	if (CYMRIC_VERSION != expected_version) {
+		return -1;
+	}
+
+	m_is_initialized = true;
+	return 0;
 }
 
 
@@ -239,6 +247,16 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 
 	// Initialize BLAKE2 state for 512-bit output
 	blake2b_state state;
+
+	// If input is invalid,
+	if (!R) {
+		return -1;
+	}
+
+	// If not initialized yet,
+	if (!m_is_initialized) {
+		return -1;
+	}
 
 	// Mix in previous or uninitialized state
 	if (blake2b_init_key(&state, 64, R->internal, 64)) {
@@ -469,6 +487,13 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 		return -1;
 	}
 
+	// Indicate state is seeded
+	CAT_FENCE_COMPILER;
+	R->internal[64] = 'S';
+	R->internal[65] = 'E';
+	R->internal[66] = 'E';
+	R->internal[67] = 'D';
+
 	return 0;
 }
 
@@ -477,6 +502,17 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 
 int cymric_random(cymric_rng *R, char *buffer, int bytes) {
 	static const int CHACHA_ROUNDS = 20;
+
+	// Validate input
+	if (!R || !buffer || bytes <= 0) {
+		return -1;
+	}
+
+	// If R was not seeded,
+	if (R->internal[64] != 'S' || R->internal[65] != 'E' ||
+		R->internal[66] != 'E' || R->internal[67] != 'D') {
+		return -1;
+	}
 
 	// Use low 32 bytes as a key for ChaCha20
 	chacha_key *key = (chacha_key *)R->internal;
