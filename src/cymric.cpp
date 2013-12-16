@@ -500,7 +500,7 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 
 //// Random Number Generation API
 
-int cymric_random(cymric_rng *R, char *buffer, int bytes) {
+int cymric_random(cymric_rng *R, void *buffer, int bytes) {
 	static const int CHACHA_ROUNDS = 20;
 
 	// Validate input
@@ -587,6 +587,57 @@ int cymric_random(cymric_rng *R, char *buffer, int bytes) {
 
 	return 0;
 }
+
+int cymric_derive(cymric_rng *R, cymric_rng *source, const void *seed, int bytes) {
+	// If input is invalid,
+	if (!R) {
+		return -1;
+	}
+
+	// Initialize BLAKE2 state for 512-bit output
+	blake2b_state state;
+
+	// Mix in previous or uninitialized state
+	if (blake2b_init_key(&state, 64, R->internal, 64)) {
+		return -1;
+	}
+
+	// Mix in the seed
+	if (seed && bytes > 0) {
+		if (blake2b_update(&state, (const u8 *)seed, bytes)) {
+			return -1;
+		}
+	}
+
+	// Generate a key seed from the old RNG
+	char key[64];
+	if (cymric_random(source, key, 64)) {
+		return -1;
+	}
+
+	// Mix in the key seed
+	if (blake2b_update(&state, (const u8 *)key, 64)) {
+		return -1;
+	}
+
+	// Squeeze out 512 random bits from seed
+	if (blake2b_final(&state, (u8 *)R->internal, 64)) {
+		return -1;
+	}
+
+	// Erase BLAKE2 state
+	CAT_SECURE_CLR(&state, sizeof(state));
+
+	// Indicate state is seeded
+	CAT_FENCE_COMPILER;
+	R->internal[64] = 'S';
+	R->internal[65] = 'E';
+	R->internal[66] = 'E';
+	R->internal[67] = 'D';
+
+	return 0;
+}
+
 
 #ifdef __cplusplus
 }
