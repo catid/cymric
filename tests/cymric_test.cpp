@@ -76,8 +76,8 @@ void generate_key_test(int bytes) {
 
 	assert(sizeof(buffer) > bytes);
 
-	vector<u32> ts, tg;
-	double ws = 0, wg = 0;
+	vector<u32> ts, tg, td;
+	double ws = 0, wg = 0, wd = 0;
 
 	for (int iteration = 0; iteration < 10000; ++iteration) {
 		double s0 = m_clock.usec();
@@ -102,6 +102,17 @@ void generate_key_test(int bytes) {
 		tg.push_back(t1 - t0);
 		wg += s1 - s0;
 
+		s0 = m_clock.usec();
+		t0 = Clock::cycles();
+
+		assert(0 == cymric_derive(&R, &R, buffer, bytes));
+
+		t1 = Clock::cycles();
+		s1 = m_clock.usec();
+
+		td.push_back(t1 - t0);
+		wd += s1 - s0;
+
 		if (iteration < 5) {
 			cout << "Generated random bytes: ";
 			print_buffer(buffer, bytes);
@@ -119,11 +130,14 @@ void generate_key_test(int bytes) {
 	ws /= ts.size();
 	u32 mg = quick_select(&tg[0], (int)tg.size());
 	wg /= tg.size();
+	u32 md = quick_select(&td[0], (int)td.size());
+	wd /= td.size();
 
 	double cpb = mg / (double)bytes;
 
 	cout << "+ RNG init: `" << dec << ms << "` median cycles, `" << ws << "` avg usec" << endl;
 	cout << "+ RNG generate: `" << dec << mg << "` median cycles, `" << cpb << "` cycles/byte, `" << wg << "` avg usec" << endl;
+	cout << "+ RNG derive: `" << dec << md << "` median cycles, " << wd << "` avg usec" << endl;
 }
 
 int main() {
