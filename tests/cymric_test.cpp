@@ -140,12 +140,31 @@ void generate_key_test(int bytes) {
 	cout << "+ RNG derive: `" << dec << md << "` median cycles, " << wd << "` avg usec" << endl;
 }
 
+
+static void tscTime() {
+	const u32 c0 = Clock::cycles();
+	const double t0 = m_clock.usec();
+	const double t_end = t0 + 1000000.0;
+
+	double t;
+	u32 c;
+	do {
+		c = Clock::cycles();
+		t = m_clock.usec();
+	} while (t < t_end);
+
+	cout << "RDTSC instruction runs at " << (c - c0)/(t - t0)/1000.0 << " GHz" << endl;
+}
+
+
 int main() {
 	cout << "Cymric unit tester" << endl;
 
 	m_clock.OnInitialize();
 
 	assert(0 == cymric_init());
+
+	tscTime();
 
 	cout << "Generating 32 bytes:" << endl;
 	generate_key_test(32);
