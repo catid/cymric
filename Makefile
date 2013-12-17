@@ -96,6 +96,6 @@ cymric_test.o : tests/cymric_test.cpp
 .PHONY : clean
 
 clean :
-	#git submodule update --init
+	git submodule update --init
 	-rm test libcymric.a $(shared_test_o) $(cymric_test_o) $(cymric_o)
 
