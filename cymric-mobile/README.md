@@ -394,12 +394,3 @@ After the random number is generated, the internal state is iterated by keying t
 the BLAKE2 hash function with the 64 bytes of old state to produce the new 64 byte
 state.
 
-
-## TODO
-
-+ FreeBSD
-+ OpenBSD
-+ NetBSD
-+ XBox
-+ PS3/PS4
-

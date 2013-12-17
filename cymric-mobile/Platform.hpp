@@ -641,21 +641,6 @@ namespace cat {
 // Works for arrays, also
 #define CAT_OBJCLR(obj) CAT_CLR((void*)&(obj), sizeof(obj))
 
-	// From https://www.securecoding.cert.org/confluence/display/cplusplus/MSC06-CPP.+Be+aware+of+compiler+optimization+when+dealing+with+sensitive+data
-	CAT_INLINE void *cat_memset_s(void *v, int c, unsigned int n)
-	{
-		volatile unsigned char *p = (volatile unsigned char *)v;
-
-		while (n--)
-			*p++ = c;
-
-		return v;
-	}
-
-# define CAT_SECURE_CLR(dest, size) cat_memset_s(dest, 0, size)
-
-#define CAT_SECURE_OBJCLR(obj) CAT_SECURE_CLR((void*)&(obj), sizeof(obj))
-
 // Stringize
 #define CAT_STRINGIZE(X) DO_CAT_STRINGIZE(X)
 #define DO_CAT_STRINGIZE(X) #X

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define CYMRIC_VERSION 2
+#define CYMRIC_VERSION 3
 
 /*
  * Verify binary compatibility with the Cymric API on startup.
@@ -54,7 +54,7 @@ typedef struct {
 } cymric_rng;
 
 /*
- * Seeds a random number generator
+ * Seeds a random number generator R
  *
  * This function allows you to optionally pass in a seed buffer, which will
  * be used to improve the randomness of the generator.  To not specify a seed,
@@ -82,7 +82,7 @@ typedef struct {
 extern int cymric_seed(cymric_rng *R, const void *seed, int bytes);
 
 /*
- * Generate random bytes from a previously-initialized generator
+ * Generate random bytes from a previously-initialized generator R
  *
  * This function is not thread-safe.
  *
@@ -92,7 +92,23 @@ extern int cymric_seed(cymric_rng *R, const void *seed, int bytes);
  * Returns 0 on success.
  * Returns non-zero on error; it is important to check for this failure.
  */
-extern int cymric_random(cymric_rng *R, char *buffer, int bytes);
+extern int cymric_random(cymric_rng *R, void *buffer, int bytes);
+
+/*
+ * Derive a new random generator from an existing generator R
+ *
+ * This is useful for when you want to create a new generator for a different
+ * thread without reseeding.  This avoids blocking waiting for new random data.
+ *
+ * This function is not thread-safe.
+ *
+ * Preconditions:
+ * 	source must have been produced by cymric_seed()
+ *
+ * Returns 0 on success.
+ * Returns non-zero on error; it is important to check for this failure.
+ */
+extern int cymric_derive(cymric_rng *R, cymric_rng *source, const void *seed, int bytes);
 
 
 #ifdef __cplusplus
