@@ -30,6 +30,7 @@
 #include "blake2.h"
 #include "chacha.h"
 #include "Platform.hpp"
+#include "SecureErase.hpp"
 using namespace cat;
 
 
@@ -173,7 +174,7 @@ static u32 unix_gettid() {
 
 #ifdef CYMRIC_DEV_RANDOM
 
-static bool read_file(const char *path, char *buffer, int bytes) {
+static bool read_file(const char *path, u8 *buffer, int bytes) {
 	int remaining = bytes, retries = 100;
 
 	do {
@@ -223,6 +224,8 @@ static u32 get_counter() {
 
 static volatile bool m_is_initialized = false;
 
+static const int SEED_SCRATCH_BYTES = 32;
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -232,6 +235,12 @@ int _cymric_init(int expected_version) {
 	if (CYMRIC_VERSION != expected_version) {
 		return -1;
 	}
+
+#ifdef CYMRIC_WINMEM
+	if (sizeof(MEMORYSTATUS) > SEED_SCRATCH_BYTES) {
+		return -1;
+	}
+#endif
 
 	m_is_initialized = true;
 	return 0;
@@ -244,6 +253,9 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	// Self-test, verified to fail if set too high
 	static const int MIN_ENTROPY = 425;
 	int entropy = 0;
+
+	// Scratch space for loading entropy source bits
+	u8 scratch[SEED_SCRATCH_BYTES];
 
 	// Initialize BLAKE2 state for 512-bit output
 	blake2b_state state;
@@ -278,11 +290,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_CYCLES
 	{
 		// Mix in initial cycle count
-		u32 t0 = Clock::cycles(false);
-		if (blake2b_update(&state, (const u8 *)&t0, sizeof(t0))) {
+		u32 *t0 = (u32 *)scratch;
+		*t0 = Clock::cycles(false);
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&t0, sizeof(t0));
 		entropy += 32;
 	}
 #endif
@@ -290,7 +302,6 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_DEV_RANDOM
 	{
 		// Mix in /dev/random
-		char rand_buffer[32];
 		// This is a bit of a hack.  Most Linuxy systems "cache" about 20 bytes
 		// for /dev/random.  Requesting 32 bytes may take up to a minute longer
 		// and this would be really irritating for users of the library.  So
@@ -298,16 +309,15 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 		// which is often implemented as a separate pool that will actually
 		// provide additional entropy over /dev/random even when that device
 		// is blocking waiting for more.
-		if (!read_file(CYMRIC_RAND_FILE, rand_buffer, 20)) {
+		if (!read_file(CYMRIC_RAND_FILE, scratch, 20)) {
 			return -1;
 		}
-		if (!read_file(CYMRIC_URAND_FILE, rand_buffer + 20, 12)) {
+		if (!read_file(CYMRIC_URAND_FILE, scratch + 20, 12)) {
 			return -1;
 		}
-		if (blake2b_update(&state, (const u8 *)rand_buffer, sizeof(rand_buffer))) {
+		if (blake2b_update(&state, scratch, 32)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(rand_buffer, sizeof(rand_buffer));
 		entropy += 256;
 	}
 #endif
@@ -316,20 +326,18 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	{
 		// Mix in Windows cryptographic RNG
 		HCRYPTPROV hCryptProv;
-		char win_buffer[32];
 		if (!CryptAcquireContext(&hCryptProv, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
 			return -1;
 		}
-		if (hCryptProv && !CryptGenRandom(hCryptProv, sizeof(win_buffer), (BYTE*)win_buffer)) {
+		if (hCryptProv && !CryptGenRandom(hCryptProv, 32, scratch)) {
 			return -1;
 		}
 		if (hCryptProv && !CryptReleaseContext(hCryptProv, 0)) {
 			return -1;
 		}
-		if (blake2b_update(&state, (const u8 *)win_buffer, sizeof(win_buffer))) {
+		if (blake2b_update(&state, scratch, 32)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(win_buffer, sizeof(win_buffer));
 		entropy += 256;
 	}
 #endif
@@ -337,12 +345,10 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_ARC4RANDOM
 	{
 		// Mix in arc4random
-		char rand_buffer[32];
-		arc4random_buf(rand_buffer, sizeof(rand_buffer));
-		if (blake2b_update(&state, (const u8 *)rand_buffer, sizeof(rand_buffer))) {
+		arc4random_buf(scratch, 32);
+		if (blake2b_update(&state, scratch, 32)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(rand_buffer, sizeof(rand_buffer));
 		entropy += 256;
 	}
 #endif
@@ -350,12 +356,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_WINMEM
 	{
 		// Mix in Windows memory info
-		MEMORYSTATUS mem_stats;
-		GlobalMemoryStatus(&mem_stats);
-		if (blake2b_update(&state, (const u8 *)&mem_stats, sizeof(mem_stats))) {
+		MEMORYSTATUS *mem_stats = (MEMORYSTATUS *)scratch;
+		GlobalMemoryStatus(mem_stats);
+		if (blake2b_update(&state, scratch, sizeof(MEMORYSTATUS))) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&mem_stats, sizeof(mem_stats));
 		entropy += 32;
 	}
 #endif
@@ -363,11 +368,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_GETPID
 	{
 		// Mix in process id
-		u32 pid = (u32)getpid();
-		if (blake2b_update(&state, (const u8 *)&pid, sizeof(pid))) {
+		u32 *pid = (u32 *)scratch;
+		*pid = (u32)getpid();
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&pid, sizeof(pid));
 		entropy += 32;
 	}
 #endif
@@ -375,11 +380,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_GETTID
 	{
 		// Mix in thread id
-		u32 tid = unix_gettid();
-		if (blake2b_update(&state, (const u8 *)&tid, sizeof(tid))) {
+		u32 *tid = (u32 *)scratch;
+		*tid = unix_gettid();
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&tid, sizeof(tid));
 		entropy += 32;
 	}
 #endif
@@ -387,11 +392,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_PTHREADS
 	{
 		// Mix in pthread self id
-		pthread_t myself = pthread_self();
-		if (blake2b_update(&state, (const u8 *)&myself, sizeof(myself))) {
+		pthread_t *myself = (pthread_t *)scratch;
+		*myself = pthread_self();
+		if (blake2b_update(&state, scratch, sizeof(pthread_t))) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&myself, sizeof(myself));
 		entropy += 32;
 	}
 #endif
@@ -399,11 +404,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_WINTID
 	{
 		// Mix in thread id
-		u32 gctid = GetCurrentThreadId();
-		if (blake2b_update(&state, (const u8 *)&gctid, sizeof(gctid))) {
+		u32 *wintid = (u32 *)scratch;
+		*wintid = GetCurrentThreadId();
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&gctid, sizeof(gctid));
 		entropy += 32;
 	}
 #endif
@@ -411,11 +416,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_USEC
 	{
 		// Mix in microsecond clock
-		double s0 = clock.usec();
-		if (blake2b_update(&state, (const u8 *)&s0, sizeof(s0))) {
+		double *s0 = (double *)scratch;
+		*s0 = clock.usec();
+		if (blake2b_update(&state, scratch, sizeof(double))) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&s0, sizeof(s0));
 		entropy += 32;
 	}
 #endif
@@ -424,12 +429,13 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	{
 		// Mix in srandom
 		srandom(random() ^ time(0));
-		u32 sr[2] = { random(), random() };
-		if (black2b_update(&state, (const u8 *)&sr[0], sizeof(sr))) {
+		u32 *sr = (u32 *)scratch;
+		sr[0] = random();
+		sr[1] = random();
+		if (black2b_update(&state, scratch, 8)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(sr, sizeof(sr));
-		entropy += 32;
+		entropy += 40;
 	}
 #endif
 
@@ -437,23 +443,24 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	{
 		// Mix in srand
 		srand(rand() ^ time(0));
-		u32 r[2] = { rand(), rand() };
-		if (blake2b_update(&state, (const u8 *)&r[0], sizeof(r))) {
+		u32 *sr = (u32 *)scratch;
+		sr[0] = rand();
+		sr[1] = rand();
+		if (blake2b_update(&state, scratch, 8)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(r, sizeof(r));
-		entropy += 32;
+		entropy += 40;
 	}
 #endif
 
 #ifdef CYMRIC_CYCLES
 	{
 		// Mix in final cycle count
-		u32 t1 = Clock::cycles(false);
-		if (blake2b_update(&state, (const u8 *)&t1, sizeof(t1))) {
+		u32 *t1 = (u32 *)scratch;
+		*t1 = Clock::cycles(false);
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&t1, sizeof(t1));
 		entropy += 9;
 	}
 #endif
@@ -461,11 +468,11 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 #ifdef CYMRIC_COUNTER
 	{
 		// Mix in incrementing counter
-		u32 c0 = get_counter();
-		if (blake2b_update(&state, (const u8 *)&c0, sizeof(c0))) {
+		u32 *c0 = (u32 *)scratch;
+		*c0 = get_counter();
+		if (blake2b_update(&state, scratch, 4)) {
 			return -1;
 		}
-		CAT_SECURE_CLR(&c0, sizeof(c0));
 		entropy += 1;
 	}
 #endif
@@ -479,8 +486,9 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 		return -1;
 	}
 
-	// Erase BLAKE2 state
-	CAT_SECURE_CLR(&state, sizeof(state));
+	// Erase BLAKE2 state and scratch
+	CAT_SECURE_OBJCLR(state);
+	CAT_SECURE_OBJCLR(scratch);
 
 	// Sanity check for compilation
 	if (entropy < MIN_ENTROPY) {
@@ -625,8 +633,9 @@ int cymric_derive(cymric_rng *R, cymric_rng *source, const void *seed, int bytes
 		return -1;
 	}
 
-	// Erase BLAKE2 state
-	CAT_SECURE_CLR(&state, sizeof(state));
+	// Erase BLAKE2 state and key
+	CAT_SECURE_OBJCLR(state);
+	CAT_SECURE_OBJCLR(key);
 
 	// Indicate state is seeded
 	CAT_FENCE_COMPILER;

@@ -10,7 +10,7 @@ OPTFLAGS = -O3
 DBGFLAGS = -g -O0 -DDEBUG
 CFLAGS = -Wall -fstrict-aliasing -I./blake2/sse -I./chacha-opt -I./libcat -I./include \
 		 -Dchacha_blocks_impl=chacha_blocks_ssse3 -Dhchacha_impl=hchacha
-LIBNAME = libcymric.a
+LIBNAME = bin/libcymric.a
 LIBS =
 
 
@@ -18,7 +18,7 @@ LIBS =
 
 shared_test_o =
 
-cymric_o = cymric.o Clock.o \
+cymric_o = cymric.o Clock.o SecureErase.o \
 		   blake2b.o chacha.o chacha_blocks_ssse3-64.o
 
 cymric_test_o = cymric_test.o $(shared_test_o)
@@ -57,7 +57,7 @@ library : $(cymric_o)
 
 test : CFLAGS += -DUNIT_TEST $(OPTFLAGS)
 test : clean $(cymric_test_o) library
-	$(CCPP) $(cymric_test_o) $(LIBS) -L. -lcymric -o test
+	$(CCPP) $(cymric_test_o) $(LIBS) -L./bin -lcymric -o test
 	./test
 
 
@@ -65,6 +65,9 @@ test : clean $(cymric_test_o) library
 
 Clock.o : libcat/Clock.cpp
 	$(CCPP) $(CFLAGS) -c libcat/Clock.cpp
+
+SecureErase.o : libcat/SecureErase.cpp
+	$(CCPP) $(CFLAGS) -c libcat/SecureErase.cpp
 
 
 # Library objects
@@ -93,7 +96,6 @@ cymric_test.o : tests/cymric_test.cpp
 .PHONY : clean
 
 clean :
-	git submodule update --init
+	#git submodule update --init
 	-rm test libcymric.a $(shared_test_o) $(cymric_test_o) $(cymric_o)
-
 
