@@ -487,7 +487,7 @@ int cymric_seed(cymric_rng *R, const void *seed, int bytes) {
 	}
 
 	// Erase BLAKE2 state and scratch
-	CAT_SECURE_OBJCLR(state);
+	CAT_SECURE_OBJCLR(state.buf);
 	CAT_SECURE_OBJCLR(scratch);
 
 	// Sanity check for compilation
@@ -588,10 +588,20 @@ int cymric_random(cymric_rng *R, void *buffer, int bytes) {
 	}
 #endif
 
+	blake2b_state state;
+
 	// Iterate the hash to erase the ChaCha20 key material
-	if (blake2b((u8 *)R->internal, R->internal, 0, 64, 64, 0)) {
+	if (blake2b_init(&state, 64)) {
 		return -1;
 	}
+	if (blake2b_update(&state, (const u8 *)R->internal, 64)) {
+		return -1;
+	}
+	if (blake2b_final(&state, (u8 *)R->internal, 64)) {
+		return -1;
+	}
+
+	CAT_SECURE_OBJCLR(state.buf);
 
 	return 0;
 }
@@ -634,7 +644,7 @@ int cymric_derive(cymric_rng *R, cymric_rng *source, const void *seed, int bytes
 	}
 
 	// Erase BLAKE2 state and key
-	CAT_SECURE_OBJCLR(state);
+	CAT_SECURE_OBJCLR(state.buf);
 	CAT_SECURE_OBJCLR(key);
 
 	// Indicate state is seeded
