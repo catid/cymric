@@ -224,7 +224,12 @@ static u32 get_counter() {
 
 static volatile bool m_is_initialized = false;
 
+// Decide how many bytes to keep for scratch space
+#ifdef CYMRIC_WINMEM
+static const int SEED_SCRATCH_BYTES = 64;
+#else
 static const int SEED_SCRATCH_BYTES = 32;
+#endif
 
 
 #ifdef __cplusplus
