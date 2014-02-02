@@ -18,6 +18,7 @@ void print_buffer(const void *buffer, int bytes) {
 	for (int ii = 0; ii < bytes; ++ii) {
 		cout << hex << setfill('0') << setw(2) << (int)b[ii];
 	}
+	cout << dec;
 }
 
 /*
