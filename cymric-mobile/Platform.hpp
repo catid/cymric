@@ -9,7 +9,7 @@
 	* Redistributions in binary form must reproduce the above copyright notice,
 	  this list of conditions and the following disclaimer in the documentation
 	  and/or other materials provided with the distribution.
-	* Neither the name of Brook nor the names of its contributors may be used
+	* Neither the name of LibCat nor the names of its contributors may be used
 	  to endorse or promote products derived from this software without
 	  specific prior written permission.
 
@@ -45,7 +45,7 @@ namespace cat {
 # include <TargetConditionals.h>
 #endif
 
-#if defined(__MINGW32__)
+#if defined(__MINGW32__) || defined(__MINGW64__)
 # define CAT_COMPILER_MINGW
 #endif
 
@@ -818,8 +818,14 @@ private: \
 # define __has_extension(x) 0
 #endif
 
-#if (defined __GNUC__ && __GNUC_MINOR__ >= 7) || (defined __clang__ && __has_extension(attribute_ext_vector_type))
-#define CAT_HAS_VECTOR_EXTENSIONS
+#if defined(__GNUC__) && __GNUC_MINOR__ >= 7
+# define CAT_HAS_VECTOR_EXTENSIONS
+# define CAT_VECTOR_SIZE(T, elements) __attribute__((vector_size(sizeof(T) * elements)))
+# define CAT_VECTOR_EXT_GCC
+#elif defined(__clang__) && __has_extension(attribute_ext_vector_type)
+# define CAT_HAS_VECTOR_EXTENSIONS
+# define CAT_VECTOR_SIZE(T, elements) __attribute__((ext_vector_type(elements)))
+# define CAT_VECTOR_EXT_CLANG
 #endif
 
 #endif // CAT_PLATFORM_HPP
