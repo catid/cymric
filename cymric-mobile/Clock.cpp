@@ -97,6 +97,14 @@ u32 Clock::sec()
 
     return GetTickCount() / 1000;
 
+#elif defined(CAT_OS_ANDROID)
+
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	return (u32)now.tv_sec;
+
 #else
 
 	struct timeval cateq_v;
@@ -127,6 +135,14 @@ u32 Clock::msec()
 #if defined(CAT_OS_WINDOWS)
 
 	return timeGetTime();
+
+#elif defined(CAT_OS_ANDROID)
+
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	return (u32)(now.tv_sec * 1000LL + now.tv_nsec / 1000000);
 
 #else
 
@@ -159,6 +175,14 @@ double Clock::usec()
     QueryPerformanceCounter(&tim);
 
     return (static_cast<double>(tim.QuadPart) * 1000000.0) * _inv_freq;
+
+#elif defined(CAT_OS_ANDROID)
+
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	return (u32)(now.tv_sec * 1000000LL + now.tv_nsec / 1000);
 
 #else
 
@@ -267,11 +291,24 @@ u32 Clock::cycles(bool sync)
 		}
 	}
 
+
+#if defined(CAT_OS_ANDROID)
+
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	return (u32)now.tv_nsec;
+
+#else
+
 	// Fall back to gettimeofday
 	struct timeval cateq_v;
 	struct timezone cateq_z;
 	gettimeofday(&cateq_v, &cateq_z);
 	x[0] = (u32)cateq_v.tv_usec;
+
+#endif
 
 #else
 
